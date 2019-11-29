@@ -1,6 +1,7 @@
 package trwmutex
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
@@ -234,4 +235,74 @@ func TestTRWMutex_TryNeverBlock(t *testing.T) {
 			t.Error("unexpectedly success to tryrlock")
 		}
 	})
+
+	t.Run("RLock -> RLock -> Upgrade", func(t *testing.T) {
+		var mu TRWMutex
+
+		// RLock -> RLock -> Upgrade
+		mu.RLock()
+
+		ch := make([]chan struct{}, 5)
+		for i := 0; i < len(ch); i++ {
+			ch[i] = make(chan struct{})
+		}
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+
+			mu.RLock()
+			<-ch[0]
+			mu.Upgrade()
+			close(ch[3])
+			<-ch[2]
+			mu.Unlock()
+		}()
+
+		go func() {
+			defer wg.Done()
+
+			<-ch[1]
+			mu.RUnlock()
+		}()
+
+		if mu.TryLock() {
+			t.Error("unexpectedly success to trylock")
+		}
+
+		close(ch[0])
+
+		if mu.TryLock() {
+			t.Error("unexpectedly success to trylock")
+		}
+
+		close(ch[1])
+
+		if mu.TryLock() {
+			t.Error("unexpectedly success to trylock")
+		}
+
+		<-ch[3]
+
+		if mu.TryLock() {
+			t.Error("unexpectedly success to trylock")
+		}
+		if mu.TryRLock() {
+			t.Error("unexpectedly success to tryrlock")
+		}
+
+		close(ch[2])
+
+		if mu.TryLock() {
+			t.Error("unexpectedly success to trylock")
+		}
+		if mu.TryRLock() {
+			t.Error("unexpectedly success to tryrlock")
+		}
+
+		wg.Wait()
+	})
+
 }
