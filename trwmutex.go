@@ -85,3 +85,45 @@ func (m *TRWMutex) RUnlock() {
 	m.rwmu.RUnlock()
 	m.mu.Unlock()
 }
+
+// Upgrade converts reader lock to writer lock and returns success (true) or dead-lock (false).
+// If Upgrade by multi reader locker at same time then dead-lock.
+// Upgrade is given priority to Lock.
+func (m *TRWMutex) Upgrade() {
+	m.mu.Lock()
+	m.w++
+	if m.r > 1 || m.w > 1 {
+		// other one already acquired lock.
+		// release the read lock and wait for write lock outside of m.mu lock.
+		m.rwmu.RUnlock()
+		m.r--
+		m.mu.Unlock()
+		m.rwmu.Lock()
+	} else {
+		// release the read lock and acquire write lock.
+		m.rwmu.RUnlock()
+		m.r--
+		// m.rwmu.Lock() never blocks
+		m.rwmu.Lock()
+		m.mu.Unlock()
+	}
+}
+
+// TryUpgrade try to convert reader lock to writer lock and returns success (true) or dead-lock (false).
+// If Upgrade by multi reader locker at same time then dead-lock.
+// Upgrade is given priority to Lock.
+func (m *TRWMutex) TryUpgrade() bool {
+	m.mu.Lock()
+	if m.r > 1 || m.w > 1 {
+		// other one already acquired lock.
+		m.mu.Unlock()
+		return false
+	}
+	m.w++
+	m.rwmu.RUnlock()
+	m.r--
+	// m.rwmu.Lock() never blocks
+	m.rwmu.Lock()
+	m.mu.Unlock()
+	return true
+}

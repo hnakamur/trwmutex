@@ -37,9 +37,36 @@ func TestTRWMutex(t *testing.T) {
 		t.Error("unexpectedly failed to try rlock")
 	}
 
+	if mu.TryUpgrade() {
+		t.Error("unexpectedly success to upgrade lock to read locked mutex")
+	}
+
 	mu.RUnlock()
+
+	if mu.TryUpgrade() {
+		t.Error("unexpectedly success to upgrade lock to read locked mutex")
+	}
+
 	mu.RUnlock()
-	mu.RUnlock()
+
+	if !mu.TryUpgrade() {
+		t.Error("unexpectedly failed to try upgrade")
+	}
+
+	if mu.TryLock() {
+		t.Error("unexpectedly success to try lock to write locked mutex")
+	}
+	if mu.TryRLock() {
+		t.Error("unexpectedly success to try lock to write locked mutex")
+	}
+
+	mu.Unlock()
+
+	mu.RLock()
+
+	mu.Upgrade()
+
+	mu.Unlock()
 }
 
 func TestTRWMutex_LockOrder(t *testing.T) {
